@@ -5,6 +5,7 @@ import openai
 import logging
 import time
 import traceback
+import re
 
 
 # SCSBotWrapper is designed to support both polling and webhook modes of deployment
@@ -95,32 +96,41 @@ class SCSBotWrapper:
     # *This function is a rare situation where we use the "free" text directly from the user
     # *This is a feature by design, not an injection vulnerability
     def query_ai_gpt35 (self, user_prompt):
-        completion = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "user", "content": user_prompt}
-            ]
-        )
+        try:
+            completion = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
 
-        return completion.choices[0].message["content"]
+            return completion.choices[0].message["content"]
+        
+        except openai.OpenAIError as e:
+            logging.error ("Caught OpenAIError. Unable to process: \"{prompt}\"".format(prompt = re.escape(user_prompt)))
+            raise e
 
     # This function queries for classification
     def query_ai_classification (self, user_prompt):
 
         user_prompt = user_prompt + "\n\n###\n\n"
+        try:
+            response = openai.Completion.create(
+                model=self.finetuned_model,
+                prompt=user_prompt,
+                temperature=0,
+                max_tokens=10,
+                top_p=1,
+                frequency_penalty=0,
+                presence_penalty=0,
+                stop=["###"]
+            )
 
-        response = openai.Completion.create(
-            model=self.finetuned_model,
-            prompt=user_prompt,
-            temperature=0,
-            max_tokens=10,
-            top_p=1,
-            frequency_penalty=0,
-            presence_penalty=0,
-            stop=["###"]
-        )
-
-        return response.choices[0].text
+            return response.choices[0].text
+        
+        except openai.OpenAIError as e:
+            logging.error ("Caught OpenAIError. Unable to process: \"{prompt}\"".format(prompt = re.escape(user_prompt)))
+            raise e
 
     # This function checks if the message is job post
     # If it is not a job post, it is forwarded to Career Discussions topic
